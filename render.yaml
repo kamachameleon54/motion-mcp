@@ -1,0 +1,56 @@
+# Single-user Motion MCP. Secret values are entered in Render, never committed.
+services:
+  - type: web
+    name: motion-mcp
+    runtime: node
+    plan: starter
+    region: oregon
+    numInstances: 1
+    branch: main
+    buildCommand: npm ci && npm run build && npm prune --omit=dev
+    startCommand: npm run start:http
+    healthCheckPath: /health
+    autoDeployTrigger: "off"
+    disk:
+      name: motion-state
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: NODE_VERSION
+        value: 24.15.0
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: MOTION_STATE_PATH
+        value: /var/data/motion/state.sqlite
+      - key: MOTION_RATE_LIMIT_PER_MINUTE
+        value: "12"
+      - key: MOTION_API_KEY
+        sync: false
+      - key: MOTION_ACCOUNT_ID
+        sync: false
+      - key: MOTION_USER_ID
+        sync: false
+      - key: MOTION_WORKSPACE_IDS
+        sync: false
+      - key: MOTION_ASSIGNEE_IDS
+        sync: false
+      - key: MOTION_STATUS_MAP
+        sync: false
+      - key: MCP_RESOURCE_URL
+        sync: false
+      - key: MCP_OAUTH_ISSUER
+        sync: false
+      - key: MCP_JWKS_URL
+        sync: false
+      - key: MCP_ALLOWED_SUBJECT
+        sync: false
+      - key: MCP_AUTH_PROVIDER
+        value: supabase
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_PUBLISHABLE_KEY
+        sync: false
+      - key: MCP_SUPABASE_CLIENTS
+        sync: false

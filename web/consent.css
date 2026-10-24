@@ -1,0 +1,76 @@
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  background: #f4f3ef;
+  color: #192d2a;
+  font:
+    17px/1.55 system-ui,
+    sans-serif;
+}
+main {
+  width: min(100% - 40px, 520px);
+  margin: 10vh auto;
+  padding: 32px;
+  background: #fff;
+  border: 1px solid #d8dfda;
+  border-radius: 16px;
+}
+h1 {
+  font-size: 2rem;
+  line-height: 1.15;
+  margin: 0 0 24px;
+}
+h2 {
+  font-size: 1.2rem;
+}
+.eyebrow {
+  font-size: 12px;
+  letter-spacing: 0.15em;
+  color: #526c62;
+}
+.note {
+  font-size: 14px;
+  color: #52645c;
+}
+label,
+input {
+  display: block;
+  width: 100%;
+}
+input {
+  font: inherit;
+  margin: 8px 0 16px;
+  padding: 12px;
+  border: 1px solid #6f8075;
+  border-radius: 7px;
+}
+button {
+  font: inherit;
+  padding: 12px 18px;
+  border: 1px solid #244f43;
+  border-radius: 7px;
+  background: #244f43;
+  color: white;
+  cursor: pointer;
+}
+.secondary {
+  background: white;
+  color: #244f43;
+}
+.actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+button:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+#signout {
+  margin-top: 24px;
+}
+[hidden] {
+  display: none !important;
+}
