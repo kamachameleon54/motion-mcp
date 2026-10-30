@@ -1,4 +1,4 @@
-FROM node:24-bookworm-slim AS build
+FROM node:24.22.2-bookworm-slim AS build
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci
@@ -8,7 +8,7 @@ COPY web ./web
 COPY scripts/build-web.mjs ./scripts/build-web.mjs
 RUN npm run build && npm prune --omit=dev
 
-FROM node:24-bookworm-slim
+FROM node:24.22.2-bookworm-slim
 ENV NODE_ENV=production HOST=0.0.0.0 PORT=8787 MOTION_STATE_PATH=/var/data/motion/state.sqlite
 WORKDIR /app
 COPY --from=build --chown=node:node /app/dist ./dist

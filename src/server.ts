@@ -2,7 +2,6 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { Ajv } from 'ajv';
 import { z, ZodError } from 'zod';
-import { zodToJsonSchema } from 'zod-to-json-schema';
 import { MotionApiClient } from './api/client.js';
 import { MotionError, safeError } from './core/errors.js';
 import {
@@ -41,7 +40,7 @@ function typedTool<T extends z.ZodTypeAny>(
   return {
     name,
     description,
-    inputSchema: zodToJsonSchema(schema, { $refStrategy: 'none' }) as Tool['inputSchema'],
+    inputSchema: z.toJSONSchema(schema, { target: 'draft-7', io: 'input', reused: 'inline' }) as Tool['inputSchema'],
     handler: async (input) => handler(schema.parse(input)),
   };
 }
