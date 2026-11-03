@@ -43,7 +43,8 @@ export async function verifyAccessToken(
   getKey: JWTVerifyGetKey = teamKeys(config.teamDomain)
 ): Promise<{ email: string }> {
   if (!token) throw new Error('missing token');
-  if (!config.teamDomain || !config.aud || !config.allowedEmail) throw new Error('incomplete config');
+  if (!config.teamDomain || !config.aud || !config.allowedEmail)
+    throw new Error('incomplete config');
   const { payload } = await jwtVerify(token, getKey, {
     algorithms: ['RS256'],
     issuer: config.teamDomain,

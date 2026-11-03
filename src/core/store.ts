@@ -28,7 +28,8 @@ export class Store {
   db: SqlDatabase;
   constructor(db: SqlDatabase) {
     this.db = db;
-    this.db.exec(`CREATE TABLE IF NOT EXISTS operations (account TEXT, key TEXT, fingerprint TEXT, state TEXT, result TEXT, PRIMARY KEY(account,key));
+    this.db
+      .exec(`CREATE TABLE IF NOT EXISTS operations (account TEXT, key TEXT, fingerprint TEXT, state TEXT, result TEXT, PRIMARY KEY(account,key));
       CREATE TABLE IF NOT EXISTS requests (account TEXT, at INTEGER);
       CREATE INDEX IF NOT EXISTS requests_account ON requests(account,at);
       CREATE TABLE IF NOT EXISTS cooldowns (account TEXT PRIMARY KEY, until_ms INTEGER);

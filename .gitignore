@@ -96,3 +96,8 @@ Desktop.ini
 state/
 *.sqlite*
 !.env.example
+
+# Cloudflare Workers
+.dev.vars
+.wrangler/
+worker-configuration.d.ts

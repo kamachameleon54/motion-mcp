@@ -32,7 +32,9 @@ test('config: refuses an empty or missing AUD', () => {
 });
 test('config: refuses a non-Access or plain-http team domain', () => {
   assert.throws(() => parseAccessConfig({ ...env, ACCESS_TEAM_DOMAIN: 'http://localhost' }));
-  assert.throws(() => parseAccessConfig({ ...env, ACCESS_TEAM_DOMAIN: 'https://evil.example.test' }));
+  assert.throws(() =>
+    parseAccessConfig({ ...env, ACCESS_TEAM_DOMAIN: 'https://evil.example.test' })
+  );
 });
 test('config: refuses an email without @', () => {
   assert.throws(() => parseAccessConfig({ ...env, ACCESS_ALLOWED_EMAIL: '' }));

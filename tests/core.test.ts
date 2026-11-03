@@ -660,3 +660,11 @@ test('server rejects an unknown key nested in autoScheduled before calling Motio
     core.close();
   }
 });
+test('extra disabled tools are not listed', async () => {
+  const { getTools } = await import('../src/server.js');
+  const client = makeClient(fixture().config);
+  const names = getTools(client, ['motion_delete_task']).map((t) => t.name);
+  assert.ok(!names.includes('motion_delete_task'));
+  assert.ok(names.includes('motion_create_task'));
+  client.close();
+});

@@ -44,7 +44,7 @@ function typedTool<T extends z.ZodTypeAny>(
     handler: async (input) => handler(schema.parse(input)),
   };
 }
-export function getTools(client: MotionApiClient): Tool[] {
+export function getTools(client: MotionApiClient, extraDisabled: readonly string[] = []): Tool[] {
   const tools = [
     ...registerWorkspaceTools(client),
     ...registerTaskTools(client),
@@ -131,7 +131,7 @@ export function getTools(client: MotionApiClient): Tool[] {
     ),
   ];
   return tools
-    .filter((t) => !disabled.has(t.name))
+    .filter((t) => !disabled.has(t.name) && !extraDisabled.includes(t.name))
     .map((t) => {
       const read = /^motion_(get|list|review)_/.test(t.name);
       return {
@@ -150,7 +150,8 @@ export function createMcpServer(
   client: MotionApiClient,
   scopes = ['motion:read', 'motion:write'],
   metadataURL?: string,
-  oauthScopes?: string[]
+  oauthScopes?: string[],
+  extraDisabled: readonly string[] = []
 ) {
   // Tool schemas are emitted as draft-07; the provider defaults to 2020-12, so pin the draft.
   // Ajv is not used because it generates code at runtime, which Workers forbid.
@@ -159,7 +160,7 @@ export function createMcpServer(
     { name: 'motion-mcp-server', version: '0.2.0' },
     { capabilities: { tools: {} }, instructions, jsonSchemaValidator: validator }
   );
-  const tools = getTools(client);
+  const tools = getTools(client, extraDisabled);
   const validators = new Map(
     tools.map((t) => [t.name, validator.getValidator(t.inputSchema as never)])
   );
