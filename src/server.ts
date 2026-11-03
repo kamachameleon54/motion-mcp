@@ -1,6 +1,6 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
-import { Ajv } from 'ajv';
+import { CfWorkerJsonSchemaValidator } from '@modelcontextprotocol/sdk/validation/cfworker';
 import { z, ZodError } from 'zod';
 import { MotionApiClient } from './api/client.js';
 import { MotionError, safeError } from './core/errors.js';
@@ -152,13 +152,17 @@ export function createMcpServer(
   metadataURL?: string,
   oauthScopes?: string[]
 ) {
+  // Tool schemas are emitted as draft-07; the provider defaults to 2020-12, so pin the draft.
+  // Ajv is not used because it generates code at runtime, which Workers forbid.
+  const validator = new CfWorkerJsonSchemaValidator({ draft: '7', shortcircuit: false });
   const server = new Server(
     { name: 'motion-mcp-server', version: '0.2.0' },
-    { capabilities: { tools: {} }, instructions }
+    { capabilities: { tools: {} }, instructions, jsonSchemaValidator: validator }
   );
   const tools = getTools(client);
-  const ajv = new Ajv({ strict: false, allErrors: true, validateFormats: false });
-  const validators = new Map(tools.map((t) => [t.name, ajv.compile(t.inputSchema)]));
+  const validators = new Map(
+    tools.map((t) => [t.name, validator.getValidator(t.inputSchema as never)])
+  );
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
     tools: tools
       .filter((t) => scopes.includes(t.annotations?.readOnlyHint ? 'motion:read' : 'motion:write'))
@@ -184,10 +188,11 @@ export function createMcpServer(
         );
       if (!scopes.includes(tool.annotations?.readOnlyHint ? 'motion:read' : 'motion:write'))
         throw new MotionError('scope_denied', 'This connection cannot perform that operation.');
-      const validate = validators.get(tool.name)!;
-      if (!validate(request.params.arguments || {}))
+      const checked = validators.get(tool.name)!(request.params.arguments || {});
+      if (!checked.valid)
         throw new MotionError('invalid_input', 'Tool input does not match its schema.', {
-          fields: validate.errors?.map((e) => ({ path: e.instancePath, keyword: e.keyword })),
+          // The caller is the owner; cap length so a huge input cannot bloat the response.
+          detail: (checked.errorMessage ?? '').slice(0, 500),
         });
       let result = await tool.handler(request.params.arguments || {});
       if (result && typeof result === 'object' && 'workspace' in result && 'duration' in result)

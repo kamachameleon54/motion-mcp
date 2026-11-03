@@ -619,3 +619,44 @@ test('custom field values can intentionally return to an earlier value', async (
   assert.equal(f.calls.filter((c) => c.method === 'POST').length, 3);
   f.client.close();
 });
+test('every tool schema compiles and rejects an unknown top-level key', async () => {
+  const { getTools } = await import('../src/server.js');
+  const { CfWorkerJsonSchemaValidator } = await import(
+    '@modelcontextprotocol/sdk/validation/cfworker'
+  );
+  const v = new CfWorkerJsonSchemaValidator({ draft: '7', shortcircuit: false });
+  const client = makeClient(fixture().config);
+  for (const t of getTools(client)) {
+    const check = v.getValidator(t.inputSchema as never);
+    assert.equal(check({ __unknown__: 1 }).valid, false, t.name);
+  }
+  client.close();
+});
+test('server rejects an unknown key nested in autoScheduled before calling Motion', async () => {
+  const { createMcpServer } = await import('../src/server.js');
+  const { Client } = await import('@modelcontextprotocol/sdk/client/index.js');
+  const { InMemoryTransport } = await import('@modelcontextprotocol/sdk/inMemory.js');
+  const f = fixture();
+  const core = makeClient(f.config);
+  const server = createMcpServer(core);
+  const [a, b] = InMemoryTransport.createLinkedPair();
+  const client = new Client({ name: 'validator-fixture', version: '1' });
+  await server.connect(a);
+  await client.connect(b);
+  try {
+    const result: any = await client.callTool({
+      name: 'motion_create_task',
+      arguments: {
+        name: 'test',
+        workspaceId: 'work',
+        autoScheduled: { deadlineType: 'SOFT', inventedFlag: true },
+      },
+    });
+    assert.equal(result.isError, true);
+    assert.equal(JSON.parse(result.content[0].text).code, 'invalid_input');
+    assert.equal(f.calls.length, 0);
+  } finally {
+    await client.close();
+    core.close();
+  }
+});
