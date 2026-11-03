@@ -130,6 +130,10 @@ export function getTools(client: MotionApiClient, extraDisabled: readonly string
       }
     ),
   ];
+  // A misspelled kill-switch name would silently leave that tool on, so refuse to start.
+  const unknown = extraDisabled.filter((name) => !tools.some((t) => t.name === name));
+  if (unknown.length)
+    throw new MotionError('configuration', 'Unknown disabled tool: ' + unknown.join(', '));
   return tools
     .filter((t) => !disabled.has(t.name) && !extraDisabled.includes(t.name))
     .map((t) => {

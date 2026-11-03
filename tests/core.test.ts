@@ -683,3 +683,52 @@ test('Motion redirects are refused, not followed, with a fetch mode Workers acce
   assert.deepEqual(seen, ['manual']);
   client.close();
 });
+test('an unknown extra disabled tool name fails closed', async () => {
+  const { getTools } = await import('../src/server.js');
+  const client = makeClient(fixture().config);
+  assert.throws(() => getTools(client, ['motion_delete_tsak']), /configuration|unknown/i);
+  client.close();
+});
+test('calling a disabled tool by name is refused as unsupported', async () => {
+  const { createMcpServer } = await import('../src/server.js');
+  const { Client } = await import('@modelcontextprotocol/sdk/client/index.js');
+  const { InMemoryTransport } = await import('@modelcontextprotocol/sdk/inMemory.js');
+  const f = fixture();
+  f.tasks.set('task_1', task());
+  const core = makeClient(f.config);
+  const server = createMcpServer(core, undefined, undefined, undefined, ['motion_delete_task']);
+  const [a, b] = InMemoryTransport.createLinkedPair();
+  const client = new Client({ name: 'kill-switch-fixture', version: '1' });
+  await server.connect(a);
+  await client.connect(b);
+  try {
+    const result: any = await client.callTool({
+      name: 'motion_delete_task',
+      arguments: { taskId: 'task_1' },
+    });
+    assert.equal(result.isError, true);
+    assert.equal(JSON.parse(result.content[0].text).code, 'unsupported');
+    assert.equal(f.calls.filter((c) => c.method === 'DELETE').length, 0);
+  } finally {
+    await client.close();
+    core.close();
+  }
+});
+test('worker config requires the remote scope lists and parses CSVs', async () => {
+  const { workerConfig, disabledTools } = await import('../src/worker/config.js');
+  const env: any = {
+    MOTION_API_KEY: 'k',
+    MOTION_ACCOUNT_ID: 'acct',
+    MOTION_USER_ID: 'owner',
+    MOTION_WORKSPACE_IDS: ' w1, w2 ,',
+    MOTION_ASSIGNEE_IDS: 'owner',
+  };
+  const c = workerConfig(env);
+  assert.deepEqual(c.allowedWorkspaceIds, ['w1', 'w2']);
+  assert.deepEqual(c.allowedAssigneeIds, ['owner']);
+  assert.equal(c.rateLimitPerMinute, 6);
+  for (const k of ['MOTION_WORKSPACE_IDS', 'MOTION_ASSIGNEE_IDS', 'MOTION_USER_ID', 'MOTION_API_KEY'])
+    assert.throws(() => workerConfig({ ...env, [k]: ' ' }), new RegExp(k));
+  assert.deepEqual(disabledTools({ ...env, MOTION_DISABLED_TOOLS: 'a, b,,' }), ['a', 'b']);
+  assert.deepEqual(disabledTools(env), []);
+});
