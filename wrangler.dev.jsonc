@@ -1,0 +1,18 @@
+// Local only: pass to `wrangler dev --config wrangler.dev.jsonc`. Never deploy this config.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "motion-mcp-dev",
+  "main": "src/worker/dev-entry.ts",
+  "compatibility_date": "2026-10-27",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "preview_urls": false,
+  "durable_objects": { "bindings": [{ "name": "MOTION", "class_name": "MotionObject" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["MotionObject"] }],
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1,
+    "logs": { "invocation_logs": false },
+    "traces": { "enabled": false }
+  }
+}
