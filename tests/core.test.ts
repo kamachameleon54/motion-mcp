@@ -668,3 +668,18 @@ test('extra disabled tools are not listed', async () => {
   assert.ok(names.includes('motion_create_task'));
   client.close();
 });
+test('Motion redirects are refused, not followed, with a fetch mode Workers accept', async () => {
+  // Workers throw on redirect: 'error'; 'manual' returns the 3xx, which the client refuses.
+  const seen: Array<RequestRedirect | undefined> = [];
+  const config = {
+    ...fixture().config,
+    fetch: (async (_url: string | URL | Request, init?: RequestInit) => {
+      seen.push(init?.redirect);
+      return new Response(null, { status: 302, headers: { location: 'https://evil.test/' } });
+    }) as typeof globalThis.fetch,
+  };
+  const client = makeClient(config);
+  await rejected(client.getCurrentUser(), 'upstream_rejected');
+  assert.deepEqual(seen, ['manual']);
+  client.close();
+});

@@ -83,7 +83,8 @@ export class MotionApiClient {
           method,
           headers: { 'X-API-Key': this.config.apiKey, 'Content-Type': 'application/json' },
           body: data === undefined ? undefined : JSON.stringify(data),
-          redirect: 'error',
+          // Workers reject 'error'; 'manual' hands back the 3xx, which !response.ok refuses below.
+          redirect: 'manual',
           signal: AbortSignal.timeout(this.config.timeoutMs ?? 12000),
         });
         if (response.status === 429) {
