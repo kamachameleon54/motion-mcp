@@ -169,3 +169,7 @@ export const captureInput = {
   authorization: 'explicit_user_request',
   requestEvidence: { kind: 'user_instruction', reference: 'user-message:expenses' },
 };
+import { MotionApiClient } from '../src/api/client.js';
+import { openNodeStore } from '../src/core/node-sqlite.js';
+export const makeClient = (config: MotionConfig) =>
+  new MotionApiClient(config, openNodeStore(config.statePath ?? ':memory:'));

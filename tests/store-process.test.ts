@@ -4,14 +4,14 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
-import { Store } from '../src/core/store.js';
+import { openNodeStore } from '../src/core/node-sqlite.js';
 test('separate OS processes share one rolling account quota', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'motion-multiprocess-')),
     path = join(dir, 'state.sqlite');
-  const initial = new Store(path);
+  const initial = openNodeStore(path);
   initial.close();
   const script =
-    "import {Store} from './src/core/store.ts';const s=new Store(process.env.TEST_DB);console.log(s.reserve('shared',1,1000));s.close();";
+    "import {openNodeStore} from './src/core/node-sqlite.ts';const s=openNodeStore(process.env.TEST_DB);console.log(s.reserve('shared',1,1000));s.close();";
   const run = () =>
     new Promise<number>((resolve, reject) => {
       const p = spawn(process.execPath, ['--import', 'tsx', '--input-type=module', '-e', script], {

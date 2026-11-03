@@ -6,8 +6,7 @@ import { PGlite } from '@electric-sql/pglite';
 import { createVerifier } from '../src/auth.js';
 import { supabaseConfig, type ConsentConfig } from '../src/supabase-config.js';
 import { createHttpApp } from '../src/http-app.js';
-import { MotionApiClient } from '../src/api/client.js';
-import { fixture } from './fixture.js';
+import { fixture, makeClient } from './fixture.js';
 import { safeRedirect, validateAuthorization } from '../web/consent-policy.js';
 const subject = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const clientId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
@@ -34,7 +33,7 @@ const auth = {
 
 test('Supabase accepts only resource-bound owner/client grants, rejects regular sessions and forged scope', async () => {
   const f = fixture();
-  const core = new MotionApiClient(f.config);
+  const core = makeClient(f.config);
   const keys = await generateKeyPair('ES256');
   const verify = createVerifier(
     auth,
@@ -141,7 +140,7 @@ test('consent rejects unknown client, account, permission and redirect before ap
 
 test('Supabase metadata and tool security request only supported OIDC scope while enforcing read-only Motion access', async () => {
   const f = fixture();
-  const core = new MotionApiClient(f.config);
+  const core = makeClient(f.config);
   const listener = createHttpApp(
     core,
     auth,

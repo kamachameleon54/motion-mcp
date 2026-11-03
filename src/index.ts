@@ -3,7 +3,9 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { getConfig } from './config.js';
 import { MotionApiClient } from './api/client.js';
 import { createMcpServer } from './server.js';
-const client = new MotionApiClient(getConfig());
+import { openNodeStore } from './core/node-sqlite.js';
+const config = getConfig();
+const client = new MotionApiClient(config, openNodeStore(config.statePath));
 const server = createMcpServer(client);
 server.connect(new StdioServerTransport()).catch(() => {
   console.error('Motion MCP failed to start. Check configuration.');

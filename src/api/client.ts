@@ -1,6 +1,4 @@
 import { randomUUID } from 'node:crypto';
-import { join } from 'node:path';
-import { homedir } from 'node:os';
 import { setTimeout as delay } from 'node:timers/promises';
 import { Store, canonical, hash } from '../core/store.js';
 import { MotionError } from '../core/errors.js';
@@ -34,7 +32,7 @@ export class MotionApiClient {
   readonly store: Store;
   readonly account: string;
   readonly config: MotionConfig;
-  constructor(config: MotionConfig) {
+  constructor(config: MotionConfig, store: Store) {
     if (!Number.isSafeInteger(config.rateLimitPerMinute) || config.rateLimitPerMinute < 1)
       throw new MotionError('configuration', 'Invalid account quota.');
     const base = new URL(config.baseUrl);
@@ -48,9 +46,7 @@ export class MotionApiClient {
       );
     this.config = config;
     this.account = hash(config.accountId || config.apiKey);
-    this.store = new Store(
-      config.statePath || join(homedir(), '.local', 'state', 'motion-mcp', 'state.sqlite')
-    );
+    this.store = store;
   }
   close() {
     this.store.close();

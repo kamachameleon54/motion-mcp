@@ -4,6 +4,7 @@ import { MotionApiClient } from './api/client.js';
 import { createVerifier } from './auth.js';
 import { supabaseConfig } from './supabase-config.js';
 import { createHttpApp } from './http-app.js';
+import { openNodeStore } from './core/node-sqlite.js';
 async function main() {
   const config = getConfig();
   if (
@@ -22,7 +23,7 @@ async function main() {
   };
   if (new URL(auth.resource).pathname !== '/mcp') throw new Error('Resource URL must end /mcp');
   const consent = supabaseConfig(process.env, auth);
-  const client = new MotionApiClient(config);
+  const client = new MotionApiClient(config, openNodeStore(config.statePath));
   const verify = createVerifier(auth, client.store);
   await client.getCurrentUser(); // Fail closed if a server secret belongs to another Motion account.
   const app = createHttpApp(client, auth, verify, consent);

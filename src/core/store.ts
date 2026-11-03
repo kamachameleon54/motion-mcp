@@ -1,9 +1,7 @@
-import { DatabaseSync } from 'node:sqlite';
-import { mkdirSync, chmodSync } from 'node:fs';
-import { dirname } from 'node:path';
 import { createHash } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 import { MotionError } from './errors.js';
+import type { SqlDatabase } from './sql.js';
 export const hash = (value: string) => createHash('sha256').update(value).digest('hex');
 export function canonical(value: unknown): string {
   if (Array.isArray(value)) return '[' + value.map(canonical).join(',') + ']';
@@ -27,13 +25,10 @@ export interface Operation {
 /** One durable store per Motion account. Multiple local processes use SQLite transactions.
  * Production runs one service/volume; remote Claude clients use the same service. */
 export class Store {
-  db: DatabaseSync;
-  constructor(path: string) {
-    if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
-    this.db = new DatabaseSync(path);
-    if (path !== ':memory:') chmodSync(path, 0o600);
-    this.db.exec(`PRAGMA busy_timeout=5000; PRAGMA journal_mode=WAL;
-      CREATE TABLE IF NOT EXISTS operations (account TEXT, key TEXT, fingerprint TEXT, state TEXT, result TEXT, PRIMARY KEY(account,key));
+  db: SqlDatabase;
+  constructor(db: SqlDatabase) {
+    this.db = db;
+    this.db.exec(`CREATE TABLE IF NOT EXISTS operations (account TEXT, key TEXT, fingerprint TEXT, state TEXT, result TEXT, PRIMARY KEY(account,key));
       CREATE TABLE IF NOT EXISTS requests (account TEXT, at INTEGER);
       CREATE INDEX IF NOT EXISTS requests_account ON requests(account,at);
       CREATE TABLE IF NOT EXISTS cooldowns (account TEXT PRIMARY KEY, until_ms INTEGER);
@@ -42,15 +37,7 @@ export class Store {
       CREATE TABLE IF NOT EXISTS suggestions (key TEXT PRIMARY KEY, state TEXT, event TEXT);`);
   }
   transaction<T>(fn: () => T): T {
-    this.db.exec('BEGIN IMMEDIATE');
-    try {
-      const value = fn();
-      this.db.exec('COMMIT');
-      return value;
-    } catch (e) {
-      this.db.exec('ROLLBACK');
-      throw e;
-    }
+    return this.db.transaction(fn);
   }
   claim(account: string, key: string, fingerprint: string): { fresh: boolean; op: Operation } {
     return this.transaction(() => {

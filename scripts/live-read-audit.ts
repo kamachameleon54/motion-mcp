@@ -1,6 +1,7 @@
 /** Bounded, read-only pilot. Reads a local config in memory; writes only an aggregate report. */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { MotionApiClient } from '../src/api/client.js';
+import { openNodeStore } from '../src/core/node-sqlite.js';
 const sourcePath = process.env.MOTION_SOURCE_CONFIG;
 if (!sourcePath) throw new Error('Provide the source config path explicitly.');
 const config = JSON.parse(readFileSync(sourcePath, 'utf8')).mcpServers['Motion Scheduler'];
@@ -12,7 +13,7 @@ const client = new MotionApiClient({
   rateLimitPerMinute: 12,
   statePath: 'state/live-read-audit.sqlite',
   maxWaitMs: 20000,
-});
+}, openNodeStore('state/live-read-audit.sqlite'));
 try {
   const user = await client.getCurrentUser();
   const workspaces = await client.listWorkspaces();

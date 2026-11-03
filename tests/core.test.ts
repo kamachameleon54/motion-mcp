@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { MotionApiClient, validFrequency } from '../src/api/client.js';
+import { validFrequency } from '../src/api/client.js';
 import { normalizeDuration } from '../src/types/duration.js';
 import {
   captureTask,
@@ -11,12 +11,12 @@ import {
   calendarCapabilities,
   reviewMeetingPrep,
 } from '../src/core/capture.js';
-import { Store } from '../src/core/store.js';
-import { fixture, task, captureInput, future } from './fixture.js';
+import { openNodeStore } from '../src/core/node-sqlite.js';
+import { fixture, task, captureInput, future, makeClient } from './fixture.js';
 const now = new Date('2030-04-20T00:00:00Z');
 const make = () => {
   const f = fixture();
-  return { ...f, client: new MotionApiClient(f.config) };
+  return { ...f, client: makeClient(f.config) };
 };
 const rejected = (promise: Promise<unknown>, code: string) =>
   assert.rejects(promise, (e: any) => e.code === code);
@@ -149,10 +149,10 @@ test('uncertain create remains fenced across process-store restart', async () =>
     }
     return undefined;
   });
-  const first = new MotionApiClient(f.config);
+  const first = makeClient(f.config);
   await rejected(captureTask(first, captureInput, now), 'outcome_unknown');
   first.close();
-  const second = new MotionApiClient(f.config);
+  const second = makeClient(f.config);
   await rejected(captureTask(second, captureInput, now), 'outcome_unknown');
   assert.equal(posts, 1);
   second.close();
@@ -226,7 +226,7 @@ test('resolved cancelled status is not falsely reported as completed', async () 
 test('project assignment uses task PATCH and workspace move uses move payload', async () => {
   const f = fixture();
   f.config.allowedWorkspaceIds = ['work', 'private'];
-  const client = new MotionApiClient(f.config);
+  const client = makeClient(f.config);
   f.tasks.set('task_1', task());
   await client.moveTask('task_1', 'project_1');
   await client.moveTaskWorkspace('task_1', 'private');
@@ -256,8 +256,8 @@ test('cross-workspace data and routing are denied', async () => {
 });
 test('rate limit reservations and 429 cooldown are shared by independent clients', () => {
   const dir = mkdtempSync(join(tmpdir(), 'motion-quota-'));
-  const a = new Store(join(dir, 'state.sqlite')),
-    b = new Store(join(dir, 'state.sqlite'));
+  const a = openNodeStore(join(dir, 'state.sqlite')),
+    b = openNodeStore(join(dir, 'state.sqlite'));
   assert.equal(a.reserve('account', 2, 1000), 0);
   assert.equal(b.reserve('account', 2, 1000), 0);
   assert.equal(a.reserve('account', 2, 1000), 60000);
@@ -478,7 +478,7 @@ test('safe read network timeout is bounded and does not expose credentials', asy
       init?.signal?.addEventListener('abort', () => reject(new Error('fixture-secret-never-echo')))
     );
   };
-  const client = new MotionApiClient(f.config);
+  const client = makeClient(f.config);
   const keepAlive = setTimeout(() => {}, 1000);
   await assert.rejects(
     client.getCurrentUser(),

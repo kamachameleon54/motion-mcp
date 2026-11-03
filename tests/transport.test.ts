@@ -4,11 +4,10 @@ import { generateKeyPair, SignJWT, exportJWK, createLocalJWKSet } from 'jose';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import { MotionApiClient } from '../src/api/client.js';
 import { createVerifier } from '../src/auth.js';
 import { createHttpApp } from '../src/http-app.js';
 import { getTools } from '../src/server.js';
-import { fixture, captureInput } from './fixture.js';
+import { fixture, captureInput, makeClient } from './fixture.js';
 const auth = {
   issuer: 'https://issuer.example.test/',
   resource: 'https://motion.example.test/mcp',
@@ -17,7 +16,7 @@ const auth = {
 };
 async function setup() {
   const f = fixture(),
-    core = new MotionApiClient(f.config);
+    core = makeClient(f.config);
   const keys = await generateKeyPair('RS256');
   const verify = createVerifier(
     auth,
@@ -144,7 +143,7 @@ test('real SDK client initializes and calls authenticated Streamable HTTP', asyn
 });
 test('Claude stdio launches and advertises the same supported tools without contacting Motion', async () => {
   const f = fixture();
-  const core = new MotionApiClient(f.config);
+  const core = makeClient(f.config);
   const transport = new StdioClientTransport({
     command: process.execPath,
     args: ['--import', 'tsx', 'src/index.ts'],
