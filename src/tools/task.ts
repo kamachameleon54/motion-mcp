@@ -70,7 +70,7 @@ export function registerTaskTools(client: MotionApiClient): Tool[] {
     {
       name: 'motion_create_task',
       description:
-        'Create a task with duplicate search and readback. Prefer motion_capture_task for a finite scheduled next action. Reuse operationKey after uncertain writes. Motion cannot make a task repeat through task create or update; use motion_create_recurring_task for anything that repeats.',
+        'Create a task with duplicate search. Motion allows about 12 API calls a minute and a create uses about 2, so send creates one at a time, not in parallel; the server queues calls and waits up to 45 s for quota before returning rate_limit_wait. Prefer motion_capture_task for a finite scheduled next action. Reuse operationKey after uncertain writes. Motion cannot make a task repeat through task create or update; use motion_create_recurring_task for anything that repeats.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -158,7 +158,7 @@ export function registerTaskTools(client: MotionApiClient): Tool[] {
     {
       name: 'motion_update_task',
       description:
-        'Update an existing task. Motion cannot make a task repeat through task create or update; use motion_create_recurring_task for anything that repeats.',
+        "Update an existing task. Uses about 2 of Motion's ~12 API calls a minute; send updates one at a time. A 400 upstream_rejected carries Motion's own reason in upstreamMessage. Motion cannot make a task repeat through task create or update; use motion_create_recurring_task for anything that repeats.",
       inputSchema: {
         type: 'object',
         properties: {

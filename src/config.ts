@@ -15,6 +15,10 @@ export function getConfig(): MotionConfig {
     baseUrl: 'https://api.usemotion.com/v1',
     rateLimitPerMinute: Number(process.env.MOTION_RATE_LIMIT_PER_MINUTE || 12),
     statePath: process.env.MOTION_STATE_PATH,
+    maxWaitMs: process.env.MOTION_MAX_WAIT_MS ? Number(process.env.MOTION_MAX_WAIT_MS) : undefined,
+    cacheTtlMs: process.env.MOTION_CACHE_TTL_MS
+      ? Number(process.env.MOTION_CACHE_TTL_MS)
+      : undefined,
     accountId: process.env.MOTION_ACCOUNT_ID,
     expectedUserId: process.env.MOTION_USER_ID,
     allowedWorkspaceIds: csv(process.env.MOTION_WORKSPACE_IDS),
