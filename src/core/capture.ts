@@ -164,22 +164,25 @@ export async function captureTask(client: MotionApiClient, input: unknown, now =
   };
   // Observation time is stored in the operation result rather than changing the idempotent payload.
   const description = `Purpose: ${x.purpose}\n\nNext step: ${x.nextStep}\n\nSource: ${x.sourceReference}${x.collaborator ? '\n\nCollaborator: ' + x.collaborator : ''}${x.context ? '\n\nResume context: ' + x.context : ''}\n\nProvenance: ${JSON.stringify(provenance)}${eventContext}`;
-  const task = await client.createTask({
-    operationKey: x.operationKey,
-    intentKey: x.meeting ? eventMarker(x.meeting) : undefined,
-    name: x.name,
-    workspaceId: x.workspaceId,
-    projectId: x.projectId,
-    duration: x.durationMinutes,
-    dueDate,
-    autoScheduled: {
-      startDate: x.startDate,
-      schedule: x.schedule,
-      deadlineType: x.deadlineType || 'SOFT',
+  const task = await client.createTask(
+    {
+      operationKey: x.operationKey,
+      intentKey: x.meeting ? eventMarker(x.meeting) : undefined,
+      name: x.name,
+      workspaceId: x.workspaceId,
+      projectId: x.projectId,
+      duration: x.durationMinutes,
+      dueDate,
+      autoScheduled: {
+        startDate: x.startDate,
+        schedule: x.schedule,
+        deadlineType: x.deadlineType || 'SOFT',
+      },
+      priority: x.priority,
+      description,
     },
-    priority: x.priority,
-    description,
-  });
+    { readback: true }
+  );
   return {
     write: 'created_or_reconciled',
     taskId: task.id,

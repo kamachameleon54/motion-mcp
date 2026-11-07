@@ -8,6 +8,8 @@ export interface WorkerEnv {
   MOTION_DISABLED_TOOLS?: string; // CSV kill switch, merged with the built-in disabled set
   MOTION_STATUS_MAP?: string;
   MOTION_RATE_LIMIT_PER_MINUTE?: string;
+  MOTION_MAX_WAIT_MS?: string; // quota wait before rate_limit_wait; client default 45000
+  MOTION_CACHE_TTL_MS?: string; // stable-lookup cache; client default 600000, 0 disables
   ACCESS_TEAM_DOMAIN: string; // https://<team>.cloudflareaccess.com
   ACCESS_AUD: string; // Application Audience tag, 64 hex characters
   ACCESS_ALLOWED_EMAIL: string;

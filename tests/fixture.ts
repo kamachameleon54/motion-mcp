@@ -81,8 +81,16 @@ export function fixture() {
       return reply({ id: 'project_1', name: 'Expenses', workspaceId: 'work' });
     if (call.path === '/v1/projects/wrong')
       return reply({ id: 'wrong', name: 'Other', workspaceId: 'private' });
-    if (call.path === '/v1/tasks' && call.method === 'GET')
-      return reply({ tasks: [...tasks.values()], meta: {} });
+    if (call.path === '/v1/tasks' && call.method === 'GET') {
+      // Motion's documented name filter is case-insensitive.
+      const name = call.query.get('name')?.toLocaleLowerCase('en-US');
+      return reply({
+        tasks: [...tasks.values()].filter(
+          (t) => !name || t.name.toLocaleLowerCase('en-US').includes(name)
+        ),
+        meta: {},
+      });
+    }
     if (call.path === '/v1/tasks' && call.method === 'POST') {
       const t = task({
         ...call.body,

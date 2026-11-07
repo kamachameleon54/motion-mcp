@@ -28,10 +28,45 @@ const id = (value: string) => {
 };
 const normalizedName = (name: string) =>
   name.normalize('NFKC').trim().replace(/\s+/g, ' ').toLocaleLowerCase('en-US');
+// Motion's own reason for a 4xx, as plain text: no control characters, never the key, 300 chars max.
+const upstreamMessage = (text: string, apiKey: string): string | undefined => {
+  try {
+    const raw = (JSON.parse(text) as { message?: unknown })?.message;
+    const message = Array.isArray(raw)
+      ? raw.filter((m) => typeof m === 'string').join('; ')
+      : typeof raw === 'string'
+        ? raw
+        : '';
+    const clean = message
+      .split(apiKey)
+      .join('[redacted]')
+      // eslint-disable-next-line no-control-regex -- strips control characters on purpose
+      .replace(/[\u0000-\u001f\u007f]+/g, ' ')
+      .trim()
+      .slice(0, 300);
+    return clean || undefined;
+  } catch {
+    return undefined;
+  }
+};
 export class MotionApiClient {
   readonly store: Store;
   readonly account: string;
   readonly config: MotionConfig;
+  // Workspaces, projects, statuses, users, the API owner and schedules rarely change; caching them
+  // keeps a create or update to about two Motion calls instead of six or more.
+  private readonly cache = new Map<string, { at: number; value: Promise<unknown> }>();
+  private cached<T>(key: string, load: () => Promise<T>): Promise<T> {
+    const ttl = this.config.cacheTtlMs ?? 600000;
+    const hit = this.cache.get(key);
+    if (ttl > 0 && hit && Date.now() - hit.at < ttl) return hit.value as Promise<T>;
+    const value = load();
+    if (ttl > 0) {
+      this.cache.set(key, { at: Date.now(), value });
+      value.catch(() => this.cache.delete(key));
+    }
+    return value;
+  }
   constructor(config: MotionConfig, store: Store) {
     if (!Number.isSafeInteger(config.rateLimitPerMinute) || config.rateLimitPerMinute < 1)
       throw new MotionError('configuration', 'Invalid account quota.');
@@ -75,7 +110,8 @@ export class MotionApiClient {
       await this.store.acquire(
         this.account,
         this.config.rateLimitPerMinute,
-        this.config.maxWaitMs ?? 20000
+        // Wait in line rather than fail fast; stays under the 60 s MCP client request timeout.
+        this.config.maxWaitMs ?? 45000
       );
       let response: Response;
       try {
@@ -102,12 +138,17 @@ export class MotionApiClient {
             (response.status === 429 || response.status >= 500)
           )
             continue;
+          const uncertain = method !== 'GET' && (response.status >= 500 || response.status === 408);
+          const reason =
+            !uncertain && response.status >= 400 && response.status < 500
+              ? upstreamMessage(await response.text().catch(() => ''), this.config.apiKey)
+              : undefined;
           throw new MotionError(
-            method !== 'GET' && (response.status >= 500 || response.status === 408)
-              ? 'outcome_unknown'
-              : 'upstream_rejected',
+            uncertain ? 'outcome_unknown' : 'upstream_rejected',
             'Motion request was not confirmed.',
-            { status: response.status }
+            reason
+              ? { status: response.status, upstreamMessage: reason }
+              : { status: response.status }
           );
         }
         if (response.status === 204) return undefined as T;
@@ -238,7 +279,9 @@ export class MotionApiClient {
     return result;
   }
   async listWorkspaces(): Promise<MotionWorkspace[]> {
-    return (await this.all<MotionWorkspace>('/workspaces', 'workspaces')).filter(
+    return (
+      await this.cached('workspaces', () => this.all<MotionWorkspace>('/workspaces', 'workspaces'))
+    ).filter(
       (w) => !this.config.allowedWorkspaceIds || this.config.allowedWorkspaceIds.includes(w.id)
     );
   }
@@ -289,11 +332,10 @@ export class MotionApiClient {
   }
   async getStatuses(workspaceId: string): Promise<MotionStatus[]> {
     this.assertWorkspace(workspaceId);
-    const rows = await this.request<Array<MotionStatus | { status: MotionStatus }>>(
-      'GET',
-      '/statuses',
-      undefined,
-      { workspaceId }
+    const rows = await this.cached('statuses:' + workspaceId, () =>
+      this.request<Array<MotionStatus | { status: MotionStatus }>>('GET', '/statuses', undefined, {
+        workspaceId,
+      })
     );
     if (!Array.isArray(rows)) throw new MotionError('invalid_response', 'Expected statuses array.');
     return rows.map((s) => ('status' in s ? s.status : s));
@@ -342,7 +384,11 @@ export class MotionApiClient {
         );
     }
   }
-  async createTask(params: MotionTaskCreateParams): Promise<MotionTask> {
+  // readback: capture re-reads the task to report scheduling health; plain creates use Motion's response.
+  async createTask(
+    params: MotionTaskCreateParams,
+    opts: { readback?: boolean } = {}
+  ): Promise<MotionTask> {
     const { operationKey, intentKey, ...body } = params;
     await this.validateTask(body, body.workspaceId);
     const op = operationKey || hash(canonical({ kind: 'create-task', body }));
@@ -351,8 +397,15 @@ export class MotionApiClient {
       ...body,
       description: [body.description, marker].filter(Boolean).join('\n\n'),
     };
-    // All statuses for marker reconciliation; active tasks only for name duplicates.
-    const tasks = await this.allTasks(body.workspaceId);
+    // Same-name tasks in all statuses (Motion's name filter, usually one page) for marker
+    // reconciliation and active-name duplicates. An uncertain write still reconciles with a full scan.
+    const tasks = (
+      await this.all<MotionTask>('/tasks', 'tasks', {
+        workspaceId: body.workspaceId,
+        includeAllStatuses: true,
+        name: body.name,
+      })
+    ).filter((t) => t.workspace?.id === body.workspaceId);
     const markerMatches = tasks.filter((t) => t.description?.includes(marker));
     if (markerMatches.length > 1)
       throw new MotionError(
@@ -397,6 +450,11 @@ export class MotionApiClient {
       );
       return found.length === 1 ? found[0] : undefined;
     });
+    // Motion's create response is the task itself; a second GET only spent quota.
+    if (!opts.readback && created?.workspace?.id === body.workspaceId)
+      return Object.assign(created, {
+        _motion: { write: 'created', readback: 'response', operationKey: op },
+      });
     try {
       return Object.assign(await this.getTask(created.id), {
         _motion: { write: 'created', readback: 'verified', operationKey: op },
@@ -474,8 +532,11 @@ export class MotionApiClient {
       }
     );
     let task: MotionTask;
+    let fromResponse = false;
     try {
-      task = await this.getTask(taskId);
+      // Use Motion's PATCH response when it is the task; otherwise read it back.
+      fromResponse = response?.id === taskId && Boolean(response.workspace?.id);
+      task = fromResponse ? response : await this.getTask(taskId);
     } catch {
       return Object.assign(response || current, {
         _motion: { write: 'updated', readback: 'unavailable' },
@@ -484,7 +545,7 @@ export class MotionApiClient {
     return Object.assign(task, {
       _motion: {
         write: 'updated',
-        readback: 'verified',
+        readback: fromResponse ? 'response' : 'verified',
         completionVerified: completed === undefined ? undefined : task.completed === completed,
         operationKey: updateKey,
       },
@@ -551,7 +612,10 @@ export class MotionApiClient {
     return out;
   }
   async getProject(projectId: string): Promise<MotionProject> {
-    const p = await this.request<MotionProject>('GET', `/projects/${id(projectId)}`);
+    const path = `/projects/${id(projectId)}`;
+    const p = await this.cached('project:' + projectId, () =>
+      this.request<MotionProject>('GET', path)
+    );
     this.assertWorkspace(p.workspaceId);
     return p;
   }
@@ -577,7 +641,7 @@ export class MotionApiClient {
     throw this.unsupported();
   }
   async getCurrentUser(): Promise<MotionUser> {
-    const user = await this.request<MotionUser>('GET', '/users/me');
+    const user = await this.cached('me', () => this.request<MotionUser>('GET', '/users/me'));
     if (this.config.expectedUserId && user.id !== this.config.expectedUserId)
       throw new MotionError(
         'scope_denied',
@@ -593,7 +657,9 @@ export class MotionApiClient {
   async listUsers(workspaceId?: string): Promise<MotionUser[]> {
     const result = new Map<string, MotionUser>();
     for (const w of await this.workspaces(workspaceId))
-      for (const user of await this.all<MotionUser>('/users', 'users', { workspaceId: w }))
+      for (const user of await this.cached('users:' + w, () =>
+        this.all<MotionUser>('/users', 'users', { workspaceId: w })
+      ))
         result.set(user.id, user);
     return [...result.values()];
   }
@@ -605,7 +671,7 @@ export class MotionApiClient {
         'unsupported_filter',
         'Motion schedules are the API owner’s working hours, not date-range calendar events.'
       );
-    return this.request('GET', '/schedules');
+    return this.cached('schedules', () => this.request<MotionSchedule[]>('GET', '/schedules'));
   }
   async listComments(taskId: string): Promise<MotionComment[]> {
     await this.getTask(taskId);

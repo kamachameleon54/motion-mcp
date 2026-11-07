@@ -727,8 +727,89 @@ test('worker config requires the remote scope lists and parses CSVs', async () =
   assert.deepEqual(c.allowedWorkspaceIds, ['w1', 'w2']);
   assert.deepEqual(c.allowedAssigneeIds, ['owner']);
   assert.equal(c.rateLimitPerMinute, 6);
-  for (const k of ['MOTION_WORKSPACE_IDS', 'MOTION_ASSIGNEE_IDS', 'MOTION_USER_ID', 'MOTION_API_KEY'])
+  for (const k of [
+    'MOTION_WORKSPACE_IDS',
+    'MOTION_ASSIGNEE_IDS',
+    'MOTION_USER_ID',
+    'MOTION_API_KEY',
+  ])
     assert.throws(() => workerConfig({ ...env, [k]: ' ' }), new RegExp(k));
   assert.deepEqual(disabledTools({ ...env, MOTION_DISABLED_TOOLS: 'a, b,,' }), ['a', 'b']);
   assert.deepEqual(disabledTools(env), []);
+  assert.equal(c.maxWaitMs, undefined);
+  assert.equal(c.cacheTtlMs, undefined);
+  const tuned = workerConfig({ ...env, MOTION_MAX_WAIT_MS: '30000', MOTION_CACHE_TTL_MS: '0' });
+  assert.equal(tuned.maxWaitMs, 30000);
+  assert.equal(tuned.cacheTtlMs, 0);
+});
+test('warm create costs two Motion calls: a name-filtered duplicate check and the POST', async () => {
+  const f = make();
+  const base = {
+    workspaceId: 'work',
+    projectId: 'project_1',
+    duration: 30,
+    dueDate: future,
+    autoScheduled: { startDate: future, schedule: 'Work Hours', deadlineType: 'SOFT' as const },
+  };
+  await f.client.createTask({ ...base, name: 'First task' });
+  const before = f.calls.length;
+  const created = await f.client.createTask({ ...base, name: 'Second task' });
+  const used = f.calls.slice(before);
+  assert.deepEqual(
+    used.map((c) => c.method + ' ' + c.path),
+    ['GET /v1/tasks', 'POST /v1/tasks']
+  );
+  assert.equal(used[0]!.query.get('name'), 'Second task');
+  assert.equal((created as any)._motion.readback, 'response');
+  f.client.close();
+});
+test('name-filtered duplicate check still blocks an active same-name task', async () => {
+  const f = make();
+  const body = { workspaceId: 'work', name: 'Call the printer', duration: 15, dueDate: future };
+  await f.client.createTask({ ...body, operationKey: 'one' });
+  await rejected(f.client.createTask({ ...body, operationKey: 'two' }), 'duplicate_candidate');
+  assert.equal(f.tasks.size, 1);
+  f.client.close();
+});
+test('update uses the PATCH response instead of a second read', async () => {
+  const f = make();
+  f.tasks.set('task_1', task());
+  const updated = await f.client.updateTask('task_1', { dueDate: future });
+  const after = f.calls.slice(f.calls.findIndex((c) => c.method === 'PATCH') + 1);
+  assert.equal(after.length, 0);
+  assert.equal((updated as any)._motion.readback, 'response');
+  f.client.close();
+});
+test('a 4xx write surfaces Motion reason as plain text without the key', async () => {
+  const f = make();
+  f.tasks.set('task_1', task());
+  f.setHook(async (c) =>
+    c.method === 'PATCH'
+      ? new Response(
+          JSON.stringify({
+            message: ['dueDate must be later than fixture-secret-never-echo\n', 'x'.repeat(400)],
+          }),
+          { status: 400 }
+        )
+      : undefined
+  );
+  await assert.rejects(f.client.updateTask('task_1', { dueDate: future }), (e: any) => {
+    assert.equal(e.code, 'upstream_rejected');
+    assert.equal(e.details.status, 400);
+    assert.match(e.details.upstreamMessage, /^dueDate must be later than \[redacted\]/);
+    assert.ok(!e.details.upstreamMessage.includes('fixture-secret-never-echo'));
+    assert.ok(e.details.upstreamMessage.length <= 300);
+    return true;
+  });
+  f.client.close();
+});
+test('stable lookups are cached across writes', async () => {
+  const f = make();
+  await f.client.getCurrentUser();
+  await f.client.getCurrentUser();
+  await f.client.listWorkspaces();
+  await f.client.listWorkspaces();
+  assert.equal(f.calls.filter((c) => c.path === '/v1/users/me').length, 1);
+  assert.equal(f.calls.filter((c) => c.path === '/v1/workspaces').length, 1);
+  f.client.close();
 });

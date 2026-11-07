@@ -6,6 +6,7 @@ export interface MotionConfig {
   accountId?: string;
   timeoutMs?: number;
   maxWaitMs?: number;
+  cacheTtlMs?: number;
   maxPages?: number;
   allowedWorkspaceIds?: string[];
   allowedAssigneeIds?: string[];
