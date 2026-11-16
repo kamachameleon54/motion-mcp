@@ -111,6 +111,9 @@ export function fixture() {
       if (call.method === 'PATCH') {
         if (match[2]) t.workspace = { ...t.workspace, id: call.body.workspaceId };
         else {
+          // Motion's task PATCH rejects workspaceId (workspace changes go through /move).
+          if ('workspaceId' in call.body)
+            return reply({ message: ['property workspaceId should not exist'] }, 400);
           const { status, ...body } = call.body;
           Object.assign(t, body);
           if (status) {

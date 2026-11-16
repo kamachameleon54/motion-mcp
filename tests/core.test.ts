@@ -191,7 +191,7 @@ test('task update hydrates name/workspace and preserves explicit null versus omi
   await f.client.updateTask('task_1', { autoScheduled: null, projectId: 'project_1' });
   const body = f.calls.find((c) => c.method === 'PATCH')!.body;
   assert.equal(body.name, 'Prepare expenses');
-  assert.equal(body.workspaceId, 'work');
+  assert.ok(!('workspaceId' in body), 'Motion rejects workspaceId on task PATCH');
   assert.equal(body.autoScheduled, null);
   assert.equal(body.projectId, 'project_1');
   assert.ok(!('completed' in body));

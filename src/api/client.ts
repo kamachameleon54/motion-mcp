@@ -494,13 +494,15 @@ export class MotionApiClient {
       );
     if (completed !== undefined)
       changes.status = await this.completionStatus(current.workspace.id, completed, changes.status);
+    // Motion's task PATCH rejects workspaceId ("property workspaceId should not exist");
+    // the workspace is used for validation only, and workspace changes go through /move.
+    const { workspaceId: _workspaceId, ...rest } = changes;
     const body = {
-      ...changes,
+      ...rest,
       name: changes.name ?? current.name,
-      workspaceId: current.workspace.id,
     };
     if (body.autoScheduled && !body.dueDate) body.dueDate = current.dueDate;
-    await this.validateTask(body, current.workspace.id);
+    await this.validateTask({ ...body, workspaceId: current.workspace.id }, current.workspace.id);
     const updateKey = operationKey || randomUUID();
     const response = await this.write<MotionTask>(
       'PATCH',
