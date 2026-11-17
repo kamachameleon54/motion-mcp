@@ -82,7 +82,7 @@ export function registerCustomFieldTools(client: MotionApiClient): Tool[] {
             'relatedTo',
           ]),
           workspaceId: z.string().min(1),
-          metadata: z.record(z.unknown()).optional(),
+          metadata: z.record(z.string(), z.unknown()).optional(),
           operationKey: z.string().optional(),
           options: z.array(z.string()).optional(),
         });
